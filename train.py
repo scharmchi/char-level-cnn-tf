@@ -19,8 +19,8 @@ tf.flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularizaion lambda (default: 0
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 128, "Batch Size (default: 128)")
 tf.flags.DEFINE_integer("num_epochs", 50, "Number of training epochs (default: 200)")
-tf.flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps (default: 100)")
-tf.flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps (default: 100)")
+tf.flags.DEFINE_integer("evaluate_every", 5000, "Evaluate model on dev set after this many steps (default: 100)")
+tf.flags.DEFINE_integer("checkpoint_every", 1000, "Save model after this many steps (default: 100)")
 # Misc Parameters
 tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
 tf.flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
@@ -45,9 +45,10 @@ shuffle_indices = np.random.permutation(np.arange(len(y)))
 x_shuffled = x[shuffle_indices]
 y_shuffled = y[shuffle_indices]
 # Split train/test set
+n_dev_samples = 200000
 # TODO: Create a fuckin' correct cross validation procedure
-x_train, x_dev = x_shuffled[:-1000], x_shuffled[-1000:]
-y_train, y_dev = y_shuffled[:-1000], y_shuffled[-1000:]
+x_train, x_dev = x_shuffled[:-n_dev_samples], x_shuffled[-n_dev_samples:]
+y_train, y_dev = y_shuffled[:-n_dev_samples], y_shuffled[-n_dev_samples:]
 print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
 
 
@@ -127,20 +128,35 @@ with tf.Graph().as_default():
             """
             Evaluates model on a dev set
             """
-            feed_dict = {
-              cnn.input_x: x_batch,
-              cnn.input_y: y_batch,
-              cnn.dropout_keep_prob: 1.0
-            }
-            step, summaries, loss, accuracy = sess.run(
-                [global_step, dev_summary_op, cnn.loss, cnn.accuracy],
-                feed_dict)
-            time_str = datetime.datetime.now().isoformat()
-            print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
-            if writer:
-                writer.add_summary(summaries, step)
+            dev_size = len(x_batch)
+            max_batch_size = 500
+            num_batches = dev_size/max_batch_size
+            acc = []
+            losses = []
+            print("Number of batches in dev set is " + str(num_batches))
+            for i in range(num_batches):
+                x_batch_dev, y_batch_dev = preprocessing.get_batched_one_hot(
+                    x_batch, y_batch, i * max_batch_size, (i + 1) * max_batch_size)
+                feed_dict = {
+                  cnn.input_x: x_batch_dev,
+                  cnn.input_y: y_batch_dev,
+                  cnn.dropout_keep_prob: 1.0
+                }
+                step, summaries, loss, accuracy = sess.run(
+                    [global_step, dev_summary_op, cnn.loss, cnn.accuracy],
+                    feed_dict)
+                acc.append(accuracy)
+                losses.append(loss)
+                time_str = datetime.datetime.now().isoformat()
+                print("batch " + str(i + 1) + " in dev >>" +
+                      " {}: loss {:g}, acc {:g}".format(time_str, loss, accuracy))
+                if writer:
+                    writer.add_summary(summaries, step)
+            print("\nMean accuracy=" + str(sum(acc)/len(acc)))
+            print("Mean loss=" + str(sum(losses)/len(losses)))
 
-        # Generate batches
+
+        # Generate batches in one-hot-encoding format
         batches = preprocessing.batch_iter(x_train, y_train, FLAGS.batch_size, FLAGS.num_epochs)
         # Training loop. For each batch...
         for batch in batches:
@@ -149,7 +165,7 @@ with tf.Graph().as_default():
             current_step = tf.train.global_step(sess, global_step)
             if current_step % FLAGS.evaluate_every == 0:
                 print("\nEvaluation:")
-                # dev_step(x_dev, y_dev, writer=dev_summary_writer)
+                dev_step(x_dev, y_dev, writer=dev_summary_writer)
                 print("")
             if current_step % FLAGS.checkpoint_every == 0:
                 path = saver.save(sess, checkpoint_prefix, global_step=current_step)

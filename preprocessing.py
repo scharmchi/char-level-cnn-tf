@@ -13,18 +13,19 @@ def load_yelp(alphabet):
             review = json.loads(line)
             stars = review["stars"]
             text = review["text"]
-            text_end_extracted = extract_end(list(text.lower()))
-            padded = pad_sentence(text_end_extracted)
-            text_int8_repr = string_to_int8_conversion(padded, alphabet)
-            if stars == 1 or stars == 2:
-                labels.append([1, 0])
-                examples.append(text_int8_repr)
-            elif stars == 4 or stars == 5:
-                labels.append([0, 1])
-                examples.append(text_int8_repr)
-            i += 1
-            if i % 10000 == 0:
-                print("Instances processed: " + str(i))
+            if stars != 3:
+                text_end_extracted = extract_end(list(text.lower()))
+                padded = pad_sentence(text_end_extracted)
+                text_int8_repr = string_to_int8_conversion(padded, alphabet)
+                if stars == 1 or stars == 2:
+                    labels.append([1, 0])
+                    examples.append(text_int8_repr)
+                elif stars == 4 or stars == 5:
+                    labels.append([0, 1])
+                    examples.append(text_int8_repr)
+                i += 1
+                if i % 10000 == 0:
+                    print("Non-neutral instances processed: " + str(i))
     return examples, labels
 
 
@@ -47,7 +48,7 @@ def string_to_int8_conversion(char_seq, alphabet):
 
 
 def get_batched_one_hot(char_seqs_indices, labels, start_index, end_index):
-    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789-,;.!?:'\"/\\|_@#$%^&*~`+-=<>()[]{}"
+    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789-,;.!?:'\"/\\|_@#$%^&*~`+-=<>()[]{}\n"
     x_batch = char_seqs_indices[start_index:end_index]
     y_batch = labels[start_index:end_index]
     x_batch_one_hot = np.zeros(shape=[len(x_batch), len(alphabet), len(x_batch[0]), 1])
@@ -60,7 +61,7 @@ def get_batched_one_hot(char_seqs_indices, labels, start_index, end_index):
 
 def load_data():
     # TODO Add the new line character later for the yelp'cause it's a multi-line review
-    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789-,;.!?:'\"/\\|_@#$%^&*~`+-=<>()[]{}"
+    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789-,;.!?:'\"/\\|_@#$%^&*~`+-=<>()[]{}\n"
     examples, labels = load_yelp(alphabet)
     x = np.array(examples, dtype=np.int8)
     y = np.array(labels, dtype=np.int8)
@@ -75,9 +76,10 @@ def batch_iter(x, y, batch_size, num_epochs, shuffle=True):
     """
     # data = np.array(data)
     data_size = len(x)
-    print("In batch iter >> data_size is: " + str(data_size))
     num_batches_per_epoch = int(data_size/batch_size) + 1
     for epoch in range(num_epochs):
+        print("In epoch >> " + str(epoch + 1))
+        print("num batches per epoch is: " + str(num_batches_per_epoch))
         # Shuffle the data at each epoch
         if shuffle:
             shuffle_indices = np.random.permutation(np.arange(data_size))
