@@ -123,7 +123,7 @@ class CharCNN(object):
         # ================ Layer 9 ================
         # Fully connected layer 3
         with tf.name_scope("fc-3"):
-            W = tf.Variable(tf.truncated_normal([1024, 1024], stddev=0.05), name="W")
+            W = tf.Variable(tf.truncated_normal([1024, num_classes], stddev=0.05), name="W")
             b = tf.Variable(tf.constant(0.1, shape=[num_classes]), name="b")
             # l2_loss += tf.nn.l2_loss(W)
             # l2_loss += tf.nn.l2_loss(b)
